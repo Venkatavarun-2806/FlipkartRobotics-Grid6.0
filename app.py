@@ -37,7 +37,7 @@ def preprocess_image(image_file):
 
 def extract_expiry_date(text):
     date_patterns = [
-         r'(?:exp(?:iry)?\.?\s*date\s*[:\-]?\s*.*?(\d{2}[\/\-]\d{2}[\/\-][0O]\d{2}))',  # Expiry Date: 20/07/2O24
+        r'(?:exp(?:iry)?\.?\s*date\s*[:\-]?\s*.*?(\d{2}[\/\-]\d{2}[\/\-][0O]\d{2}))',  # Expiry Date: 20/07/2O24
     r'(?:exp(?:iry)?\.?\s*date\s*[:\-]?\s*.*?(\d{2}[\/\-]\d{2}[\/\-]\d{4}))',  # Expiry Date: 20/07/2024
     r'(?:exp(?:iry)?\.?\s*date\s*[:\-]?\s*.*?(\d{2}[\/\-]\d{2}[\/\-][0O]\d{2}))',  # Expiry Date: 20/07/2O24
     r'(?:exp(?:iry)?\.?\s*date\s*[:\-]?\s*.?(\d{2}\s[A-Za-z]{3,}\s*[0O]\d{2}))',  # Expiry Date: 20 MAY 2O24
@@ -115,41 +115,80 @@ def perform_ocr_on_image(image_file):
 st.title("Flipkart Robotics Services")
 
 # Sidebar navigation
+current_task = st.session_state.get('current_task', 'Home')
 task = st.sidebar.radio("Choose a task", ["Home", "Object Detection", "Text Extraction", "Freshness Detection"])
+
+# Clear uploaded file and query params when task changes
+if task != current_task:
+    st.session_state['current_task'] = task
+    if 'uploaded_file' in st.session_state:
+        del st.session_state['uploaded_file']
+    st.query_params.clear()
+    st.rerun()
+
+# Handle page reload using query parameters
+query_params = st.query_params
+uploaded = query_params.get("uploaded", False)
 
 if task == "Home":
     st.header("Welcome to Flipkart Robotics Services")
     st.markdown("""
-    - **Object Detection**: Detect objects in an image.
-    - **Text Extraction**: Extract text and expiry dates from an image.
-    - **Freshness Detection**: Classify the freshness of fruits or vegetables.
+    - *Object Detection*: Detect objects in an image.
+    - *Text Extraction*: Extract text and expiry dates from an image.
+    - *Freshness Detection*: Classify the freshness of fruits or vegetables.
     """)
 
 elif task == "Object Detection":
     st.header("Object Detection")
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
+    st.markdown("""
+    - This Detect the object in the images.
+    - The objects like Person,Bicycle, Car, Motorcycle, Airplane, Bus, Train, Truck,Bird, Cat, Dog, Horse, Sheep, Cow, Backpack, Umbrella, Handbag, Tie, Suitcase,Bottle
+    """)
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"], 
+                                   on_change=lambda: st.query_params.update({"uploaded": True}),
+                                   key="object_detection_uploader")
+
+    if uploaded_file:
         img = cv2.imdecode(np.frombuffer(uploaded_file.read(), np.uint8), cv2.IMREAD_COLOR)
         results = yolo_model(img)
         results.render()
         st.image(results.ims[0], caption="Detected Objects", use_column_width=True)
         st.success(f"Detected {len(results.xyxy[0])} objects.")
+        st.query_params.clear()
 
 elif task == "Text Extraction":
     st.header("Text Extraction and Expiry Date")
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
+    st.markdown("""
+    - This extract the readable text on the product and also checks the expiry date.
+    - Specifically identify expiry dates in various formats:
+        - DD/MM/YYYY
+        - YYYY/MM/DD
+        - DD MMM YYYY
+    """)
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"], 
+                                   on_change=lambda: st.query_params.update({"uploaded": True}),
+                                   key="text_extraction_uploader")
+
+    if uploaded_file:
         extracted_text, expiry_date = perform_ocr_on_image(uploaded_file)
         st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
         st.subheader("Extracted Text")
         st.write(extracted_text)
         st.subheader("Expiry Date")
         st.write(expiry_date)
+        st.query_params.clear()
 
 elif task == "Freshness Detection":
     st.header("Freshness Detection")
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-    if uploaded_file is not None:
+    st.markdown("""
+    - Analyze fruits and vegetables for freshness and Classify items into fresh or stale categories
+    - It perdicts Apples,Bananas,Bitter Gourds,Capsicums,Oranges,Tomatoes 
+    """)
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"], 
+                                   on_change=lambda: st.query_params.update({"uploaded": True}),
+                                   key="freshness_detection_uploader")
+
+    if uploaded_file:
         img = preprocess_image(uploaded_file)
         prediction = tensorflow_model.predict(img)
         class_index = np.argmax(prediction, axis=-1)[0]
@@ -157,3 +196,4 @@ elif task == "Freshness Detection":
         st.image(uploaded_file, caption="Uploaded Image", use_column_width=True)
         st.subheader("Freshness Status")
         st.write(f"Class: {class_name}")
+        st.query_params.clear()
